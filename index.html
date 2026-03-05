@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeMo Controller</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0f14;
+  --bg2: #13161e;
+  --bg3: #1a1e2a;
+  --card: #1e2230;
+  --border: #2a2e3f;
+  --accent: #f5a623;
+  --accent2: #4ecdc4;
+  --on: #4ade80;
+  --off: #ff6b6b;
+  --text: #e8eaf0;
+  --muted: #666d85;
+  --radius: 12px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Syne', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  background-image: 
+    radial-gradient(ellipse at 20% 50%, rgba(245,166,35,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(78,205,196,0.04) 0%, transparent 60%);
+}
+.mono { font-family: 'DM Mono', monospace; }
+
+/* HEADER */
+header {
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 20px; justify-content: space-between;
+  background: var(--bg2);
+}
+.logo { display:flex; align-items:center; gap:12px; }
+.logo-icon {
+  width:40px; height:40px; background: var(--accent);
+  border-radius: 10px; display:flex; align-items:center; justify-content:center;
+  font-size:20px;
+}
+.logo-text { font-size:22px; font-weight:800; letter-spacing:-0.5px; }
+.logo-sub { font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; margin-top:1px; }
+.status-bar { display:flex; align-items:center; gap:16px; }
+.status-dot { width:8px; height:8px; border-radius:50%; background:var(--on); box-shadow: 0 0 8px var(--on); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.device-count { font-family:'DM Mono',monospace; font-size:13px; color:var(--muted); }
+
+/* TABS */
+.tabs { display:flex; padding:0 32px; background:var(--bg2); border-bottom:1px solid var(--border); gap:4px; }
+.tab {
+  padding: 14px 20px; font-size:13px; font-weight:600; cursor:pointer;
+  color:var(--muted); border-bottom:2px solid transparent;
+  transition:all 0.2s; letter-spacing:0.3px;
+}
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.tab:hover:not(.active) { color:var(--text); }
+
+/* MAIN */
+main { padding: 28px 32px; max-width: 1100px; margin:0 auto; }
+.panel { display:none; }
+.panel.active { display:block; }
+
+/* SECTION HEADER */
+.section-header {
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;
+}
+.section-title { font-size:20px; font-weight:700; }
+.section-sub { font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; margin-top:3px; }
+
+/* BUTTONS */
+btn, .btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:9px 18px; border-radius:8px; border:none; cursor:pointer;
+  font-family:'Syne',sans-serif; font-size:13px; font-weight:600;
+  transition:all 0.15s; letter-spacing:0.2px;
+}
+.btn-primary { background:var(--accent); color:#000; }
+.btn-primary:hover { background:#e8971a; }
+.btn-secondary { background:var(--card); color:var(--text); border:1px solid var(--border); }
+.btn-secondary:hover { background:var(--bg3); }
+.btn-danger { background: rgba(255,107,107,0.15); color:var(--off); border:1px solid rgba(255,107,107,0.3); }
+.btn-danger:hover { background: rgba(255,107,107,0.25); }
+.btn-sm { padding:6px 12px; font-size:12px; }
+.btn-icon { padding:8px; border-radius:8px; border:none; cursor:pointer; background:transparent; color:var(--muted); font-size:16px; transition:0.15s; }
+.btn-icon:hover { color:var(--text); background:var(--card); }
+
+/* DEVICE GRID */
+.device-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap:16px; }
+.device-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:20px; transition:all 0.2s; cursor:default;
+  position:relative; overflow:hidden;
+}
+.device-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity:0; transition:0.3s;
+}
+.device-card:hover::before { opacity:1; }
+.device-card.online::before { background:linear-gradient(90deg,transparent,var(--on),transparent); opacity:0.6; }
+.device-card.offline { opacity:0.5; }
+.device-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+.device-icon { font-size:28px; }
+.device-badge {
+  font-size:10px; font-family:'DM Mono',monospace; padding:3px 8px;
+  border-radius:20px; font-weight:500;
+}
+.badge-on  { background:rgba(74,222,128,0.15); color:var(--on); }
+.badge-off { background:rgba(255,107,107,0.15); color:var(--off); }
+.badge-unknown { background:rgba(102,109,133,0.2); color:var(--muted); }
+.device-name { font-size:15px; font-weight:700; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.device-alias { font-size:11px; color:var(--muted); font-family:'DM Mono',monospace; }
+.device-actions { display:flex; gap:8px; margin-top:16px; }
+.toggle-btn {
+  flex:1; padding:9px; border-radius:8px; border:none; cursor:pointer;
+  font-family:'Syne',sans-serif; font-weight:600; font-size:13px; transition:all 0.15s;
+}
+.toggle-btn.on  { background:var(--on); color:#000; }
+.toggle-btn.off { background:var(--off); color:#000; }
+.toggle-btn:hover { filter:brightness(1.1); }
+
+/* EMPTY STATE */
+.empty-state {
+  text-align:center; padding:60px 20px; color:var(--muted);
+}
+.empty-icon { font-size:48px; margin-bottom:16px; }
+.empty-title { font-size:18px; font-weight:700; color:var(--text); margin-bottom:8px; }
+.empty-desc { font-size:13px; line-height:1.6; max-width:340px; margin:0 auto 24px; }
+
+/* LOADING */
+.spinner {
+  width:32px; height:32px; border:3px solid var(--border);
+  border-top-color:var(--accent); border-radius:50%;
+  animation:spin 0.8s linear infinite; margin:0 auto 16px;
+}
+@keyframes spin { to {transform:rotate(360deg)} }
+
+/* MODAL */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:0.2s;
+  backdrop-filter:blur(4px);
+}
+.modal-overlay.open { opacity:1; pointer-events:all; }
+.modal {
+  background:var(--card); border:1px solid var(--border); border-radius:16px;
+  padding:28px; width:100%; max-width:440px; max-height:90vh; overflow-y:auto;
+  transform:translateY(20px) scale(0.97); transition:0.2s;
+}
+.modal-overlay.open .modal { transform:none; }
+.modal-title { font-size:18px; font-weight:700; margin-bottom:20px; }
+.modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; }
+
+/* FORMS */
+.form-group { margin-bottom:16px; }
+label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px; letter-spacing:0.4px; text-transform:uppercase; }
+input, select {
+  width:100%; background:var(--bg3); border:1px solid var(--border);
+  border-radius:8px; padding:10px 12px; color:var(--text);
+  font-family:'Syne',sans-serif; font-size:14px; outline:none; transition:0.15s;
+}
+input:focus, select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(245,166,35,0.1); }
+select option { background:var(--bg3); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+/* TIMERS TABLE */
+.timer-list { display:flex; flex-direction:column; gap:12px; }
+.timer-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; display:flex; align-items:center; gap:16px;
+}
+.timer-icon { font-size:22px; width:40px; text-align:center; }
+.timer-info { flex:1; }
+.timer-name { font-size:14px; font-weight:600; }
+.timer-detail { font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; margin-top:3px; }
+.timer-actions { display:flex; gap:8px; }
+
+/* RULES TABLE */
+.rule-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; display:flex; align-items:center; gap:16px;
+}
+.rule-icon { font-size:22px; width:40px; text-align:center; }
+.rule-info { flex:1; }
+.rule-name { font-size:14px; font-weight:600; }
+.rule-detail { font-size:12px; color:var(--muted); margin-top:3px; }
+.rule-actions { display:flex; gap:8px; align-items:center; }
+.toggle-switch {
+  position:relative; width:40px; height:22px;
+}
+.toggle-switch input { opacity:0; width:0; height:0; }
+.slider {
+  position:absolute; inset:0; background:var(--border);
+  border-radius:11px; cursor:pointer; transition:0.3s;
+}
+.slider:before {
+  content:''; position:absolute; height:16px; width:16px;
+  left:3px; bottom:3px; background:white; border-radius:50%; transition:0.3s;
+}
+.toggle-switch input:checked + .slider { background:var(--accent); }
+.toggle-switch input:checked + .slider:before { transform:translateX(18px); }
+
+/* ALEXA PANEL */
+.alexa-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:24px; margin-bottom:16px;
+}
+.alexa-card h3 { font-size:16px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+.alexa-card p { font-size:13px; line-height:1.7; color:var(--muted); }
+.alexa-card code {
+  background:var(--bg3); border:1px solid var(--border); border-radius:6px;
+  padding:2px 8px; font-family:'DM Mono',monospace; font-size:12px; color:var(--accent2);
+}
+.code-block {
+  background:var(--bg3); border:1px solid var(--border); border-radius:8px;
+  padding:16px; font-family:'DM Mono',monospace; font-size:12px; color:var(--accent2);
+  overflow-x:auto; margin-top:10px; line-height:1.8;
+}
+.step-badge {
+  display:inline-flex; width:24px; height:24px; background:var(--accent);
+  color:#000; border-radius:50%; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; flex-shrink:0; margin-right:8px;
+}
+.step { display:flex; align-items:flex-start; margin-bottom:14px; font-size:13px; line-height:1.6; }
+
+/* TOAST */
+.toast-container { position:fixed; bottom:24px; right:24px; z-index:2000; display:flex; flex-direction:column; gap:8px; }
+.toast {
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  padding:12px 18px; font-size:13px; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  animation:slideIn 0.3s ease; display:flex; align-items:center; gap:10px;
+}
+.toast.success { border-color:rgba(74,222,128,0.4); }
+.toast.error   { border-color:rgba(255,107,107,0.4); }
+@keyframes slideIn { from {transform:translateX(100px);opacity:0} to {transform:none;opacity:1} }
+
+/* RESPONSIVE */
+@media(max-width:600px){
+  header { padding:18px 16px; }
+  .tabs  { padding:0 16px; }
+  main   { padding:20px 16px; }
+  .device-grid { grid-template-columns:1fr 1fr; }
+}
+
+.discover-btn { animation: none; }
+.version-badge {
+  font-family:"DM Mono",monospace; font-size:11px; color:var(--muted);
+  padding:4px 10px; border-radius:20px; border:1px solid var(--border);
+  cursor:pointer; transition:0.2s;
+}
+.version-badge.update-available {
+  color:var(--accent); border-color:var(--accent);
+  background:rgba(245,166,35,0.1); animation: pulse 2s infinite;
+}
+.discovering .discover-btn .btn-text { display:none; }
+.discovering .discover-btn::after { content:'Scanning…'; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="logo-text">WeMo<span style="color:var(--accent)">Hub</span></div>
+      <div class="logo-sub">local-first · no cloud</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="version-badge" id="versionBadge" onclick="checkUpdate()" title="Click to check for updates">v1.0.0</div>
+    <div class="status-dot" id="statusDot"></div>
+    <div class="device-count mono" id="deviceCount">0 devices</div>
+    <button class="btn btn-primary btn-sm discover-btn" onclick="discoverDevices()" id="discoverBtn">
+      <span class="btn-text">🔍 Scan Network</span>
+    </button>
+    <button class="btn btn-danger btn-sm" onclick="exitApp()" title="Shut down WeMoHub server">⏻ Exit</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('devices')">Devices</div>
+  <div class="tab" onclick="switchTab('timers')">⏱ Timers</div>
+  <div class="tab" onclick="switchTab('rules')">⚡ Smart Rules</div>
+  <div class="tab" onclick="switchTab('alexa')">🔊 Alexa</div>
+</div>
+
+<main>
+
+  <!-- DEVICES PANEL -->
+  <div id="panel-devices" class="panel active">
+    <div id="deviceContent">
+      <div class="empty-state">
+        <div class="spinner"></div>
+        <div class="empty-title">Scanning for WeMo devices…</div>
+        <div class="empty-desc">Looking for plugs and switches on your network.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIMERS PANEL -->
+  <div id="panel-timers" class="panel">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Timers & Schedules</div>
+        <div class="section-sub">Automate on/off times for any device</div>
+      </div>
+      <button class="btn btn-primary" onclick="openTimerModal()">+ Add Timer</button>
+    </div>
+    <div id="timerList">
+      <div class="empty-state">
+        <div class="empty-icon">⏱</div>
+        <div class="empty-title">No timers yet</div>
+        <div class="empty-desc">Create schedules to automatically turn devices on or off at specific times.</div>
+        <button class="btn btn-primary" onclick="openTimerModal()">Create First Timer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULES PANEL -->
+  <div id="panel-rules" class="panel">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Smart Rules</div>
+        <div class="section-sub">When one device changes, trigger another</div>
+      </div>
+      <button class="btn btn-primary" onclick="openRuleModal()">+ Add Rule</button>
+    </div>
+    <div id="ruleList">
+      <div class="empty-state">
+        <div class="empty-icon">⚡</div>
+        <div class="empty-title">No rules yet</div>
+        <div class="empty-desc">Example: When living room plug turns ON → turn on bedroom switch.</div>
+        <button class="btn btn-primary" onclick="openRuleModal()">Create First Rule</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALEXA PANEL -->
+  <div id="panel-alexa" class="panel">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Alexa Integration</div>
+        <div class="section-sub">Control your WeMo devices with voice</div>
+      </div>
+    </div>
+
+    <div class="alexa-card">
+      <h3>🔊 How Alexa Integration Works</h3>
+      <p>
+        Since Belkin shut down the official WeMo Alexa skill, you can set up your <strong>own custom Alexa skill</strong>
+        that talks to WeMoHub running on your local network. You need your server to be reachable from the internet
+        (use Tailscale, ngrok, or port forwarding — you already have Tailscale set up!).
+      </p>
+    </div>
+
+    <div class="alexa-card">
+      <h3><span class="step-badge">1</span> Expose WeMoHub to the Internet</h3>
+      <p>Using your existing Tailscale setup, your WeMoHub URL is:</p>
+      <div class="code-block" id="alexaUrl">http://[your-tailscale-ip]:5000/alexa</div>
+      <p style="margin-top:10px;">Or use ngrok for a quick HTTPS tunnel:</p>
+      <div class="code-block">ngrok http 5000</div>
+    </div>
+
+    <div class="alexa-card">
+      <h3><span class="step-badge">2</span> Create a Custom Alexa Skill</h3>
+      <div class="step">Go to <strong>developer.amazon.com</strong> → Alexa Developer Console → Create Skill</div>
+      <div class="step">Choose <strong>"Custom"</strong> model and <strong>"Provision your own"</strong> backend</div>
+      <div class="step">Under "Endpoint", paste your WeMoHub URL above</div>
+    </div>
+
+    <div class="alexa-card">
+      <h3><span class="step-badge">3</span> Add These Intents to Your Skill</h3>
+      <p>Create these intents in the Alexa console (Interaction Model → Intents):</p>
+      <div class="code-block">
+TurnOnIntent<br>
+  Sample utterances:<br>
+  &nbsp;&nbsp;"turn on {DeviceName}"<br>
+  &nbsp;&nbsp;"switch on {DeviceName}"<br>
+<br>
+TurnOffIntent<br>
+  Sample utterances:<br>
+  &nbsp;&nbsp;"turn off {DeviceName}"<br>
+  &nbsp;&nbsp;"switch off {DeviceName}"<br>
+<br>
+ToggleIntent<br>
+  Sample utterances:<br>
+  &nbsp;&nbsp;"toggle {DeviceName}"<br>
+  &nbsp;&nbsp;"flip {DeviceName}"<br>
+      </div>
+      <p style="margin-top:10px;">Add a slot <code>DeviceName</code> of type <code>AMAZON.DeviceName</code> or a custom slot with your device names.</p>
+    </div>
+
+    <div class="alexa-card">
+      <h3><span class="step-badge">4</span> Use Your Device Names</h3>
+      <p>Name your devices in the <strong>Devices</strong> tab using aliases that are easy to say. Then just say:</p>
+      <div class="code-block">
+"Alexa, ask WeMo to turn on living room"<br>
+"Alexa, ask WeMo to turn off office plug"<br>
+"Alexa, ask WeMo to toggle garage switch"
+      </div>
+    </div>
+
+    <div class="alexa-card" style="border-color:rgba(78,205,196,0.3)">
+      <h3>💡 Simpler Alternative: Home Assistant + Nabu Casa</h3>
+      <p>
+        If you run <strong>Home Assistant</strong> on your network (e.g. on the same machine or a Pi),
+        it has a built-in WeMo integration via pywemo and native Alexa support through
+        <strong>Nabu Casa</strong> (~$7/month). This gives you zero-config Alexa voice control,
+        a full dashboard, and advanced automations without any custom skill development.
+      </p>
+    </div>
+  </div>
+
+</main>
+
+<!-- TIMER MODAL -->
+<div class="modal-overlay" id="timerModal">
+  <div class="modal">
+    <div class="modal-title">⏱ Create Timer</div>
+    <div class="form-group">
+      <label>Device</label>
+      <select id="timerDevice"></select>
+    </div>
+    <div class="form-group">
+      <label>Action</label>
+      <select id="timerAction">
+        <option value="on">Turn ON</option>
+        <option value="off">Turn OFF</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Repeat</label>
+      <select id="timerRepeat" onchange="toggleTimerFields()">
+        <option value="once">Once (specific date/time)</option>
+        <option value="daily">Every Day</option>
+        <option value="weekdays">Weekdays (Mon–Fri)</option>
+        <option value="weekends">Weekends (Sat–Sun)</option>
+        <option value="custom">Custom Days</option>
+      </select>
+    </div>
+    <div id="timerOnceFields" class="form-group">
+      <label>Date & Time</label>
+      <input type="datetime-local" id="timerDatetime">
+    </div>
+    <div id="timerRepeatFields" style="display:none">
+      <div class="form-group">
+        <label>Time</label>
+        <input type="time" id="timerTime">
+      </div>
+      <div id="timerCustomDays" class="form-group" style="display:none">
+        <label>Days (e.g. mon,wed,fri)</label>
+        <input type="text" id="timerDays" placeholder="mon,tue,wed,thu,fri,sat,sun">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Label (optional)</label>
+      <input type="text" id="timerLabel" placeholder="e.g. Bedtime lights off">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('timerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTimer()">Save Timer</button>
+    </div>
+  </div>
+</div>
+
+<!-- RULE MODAL -->
+<div class="modal-overlay" id="ruleModal">
+  <div class="modal">
+    <div class="modal-title">⚡ Create Smart Rule</div>
+    <div class="form-group">
+      <label>When this device…</label>
+      <select id="ruleTriggerDevice"></select>
+    </div>
+    <div class="form-group">
+      <label>Changes to…</label>
+      <select id="ruleTriggerOn">
+        <option value="true">Turns ON</option>
+        <option value="false">Turns OFF</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Then this device…</label>
+      <select id="ruleActionDevice"></select>
+    </div>
+    <div class="form-group">
+      <label>Should…</label>
+      <select id="ruleAction">
+        <option value="on">Turn ON</option>
+        <option value="off">Turn OFF</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Rule Name</label>
+      <input type="text" id="ruleName" placeholder="e.g. Office sync">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('ruleModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ALIAS MODAL -->
+<div class="modal-overlay" id="aliasModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Rename Device</div>
+    <input type="hidden" id="aliasDeviceName">
+    <div class="form-group">
+      <label>Display Name / Alias</label>
+      <input type="text" id="aliasValue" placeholder="e.g. Living Room Lamp">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('aliasModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAlias()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const API = '';  // Same origin
+let devices = {};
+let timers  = {};
+let rules   = {};
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const panels = ['devices','timers','rules','alexa'];
+    t.classList.toggle('active', panels[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = (type==='success'?'✅':'❌') + ' ' + msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ── Device discovery ──────────────────────────────────────────────────────
+async function discoverDevices() {
+  const btn = document.getElementById('discoverBtn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Scanning…';
+  const content = document.getElementById('deviceContent');
+  content.innerHTML = `<div class="empty-state"><div class="spinner"></div><div class="empty-title">Scanning network…</div><div class="empty-desc">This may take up to 10 seconds.</div></div>`;
+  try {
+    const r = await fetch(`${API}/api/discover`, {method:'POST'});
+    const data = await r.json();
+    devices = {};
+    data.devices.forEach(d => devices[d.name] = d);
+    renderDevices(data.devices);
+    toast(`Found ${data.devices.length} device(s)`);
+    updateCount(data.devices.length);
+  } catch(e) {
+    content.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Connection Error</div><div class="empty-desc">Make sure WeMoHub (app.py) is running on your machine. <br><br>Run: <code style="font-family:monospace;font-size:12px">python app.py</code></div></div>`;
+    toast('Could not reach server', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Scan Network';
+}
+
+async function loadDevices() {
+  try {
+    const r = await fetch(`${API}/api/devices`);
+    const data = await r.json();
+    devices = {};
+    data.devices.forEach(d => devices[d.name] = d);
+    renderDevices(data.devices);
+    updateCount(data.devices.length);
+  } catch(e) {
+    // Server might not be running yet; trigger discover
+    discoverDevices();
+  }
+}
+
+function updateCount(n) {
+  document.getElementById('deviceCount').textContent = n + ' device' + (n!==1?'s':'');
+}
+
+function renderDevices(devs) {
+  const content = document.getElementById('deviceContent');
+  if (!devs.length) {
+    content.innerHTML = `<div class="empty-state"><div class="empty-icon">🔌</div><div class="empty-title">No devices found</div><div class="empty-desc">Make sure your WeMo devices are on the same network and powered on, then scan again.</div><button class="btn btn-primary" onclick="discoverDevices()">Scan Again</button></div>`;
+    return;
+  }
+  content.innerHTML = `<div class="device-grid">${devs.map(deviceCard).join('')}</div>`;
+}
+
+function deviceCard(d) {
+  const isOn   = d.state === 1 || d.state === '1' || d.state === true;
+  const isOff  = d.state === 0 || d.state === '0' || d.state === false;
+  const stateClass = isOn ? 'badge-on' : isOff ? 'badge-off' : 'badge-unknown';
+  const stateText  = isOn ? 'ON' : isOff ? 'OFF' : '?';
+  const typeIcon   = d.type.toLowerCase().includes('insight') ? '📊' :
+                     d.type.toLowerCase().includes('switch') ? '💡' :
+                     d.type.toLowerCase().includes('dimmer') ? '🔆' : '🔌';
+  return `
+  <div class="device-card ${isOn||isOff ? 'online' : ''}" id="card-${esc(d.name)}">
+    <div class="device-header">
+      <div class="device-icon">${typeIcon}</div>
+      <div class="device-badge ${stateClass}">${stateText}</div>
+    </div>
+    <div class="device-name">${esc(d.alias || d.name)}</div>
+    <div class="device-alias mono">${esc(d.name)}</div>
+    <div class="device-actions">
+      <button class="toggle-btn ${isOn?'on':'off'}" onclick="toggleDevice('${esc(d.name)}')">
+        ${isOn ? 'Turn OFF' : 'Turn ON'}
+      </button>
+      <button class="btn-icon" onclick="openAliasModal('${esc(d.name)}','${esc(d.alias||d.name)}')" title="Rename">✏️</button>
+    </div>
+  </div>`;
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function toggleDevice(name) {
+  try {
+    const r = await fetch(`${API}/api/devices/${encodeURIComponent(name)}/toggle`, {method:'POST'});
+    const data = await r.json();
+    if (data.ok) {
+      if (devices[name]) { devices[name].state = data.state; }
+      refreshDevice(name, data.state);
+    } else toast(data.msg, 'error');
+  } catch(e) { toast('Error', 'error'); }
+}
+
+function refreshDevice(name, state) {
+  const d = devices[name];
+  if (!d) return;
+  d.state = state;
+  const card = document.getElementById('card-' + name);
+  if (!card) return;
+  const isOn = state === 1 || state === '1' || state === true;
+  card.querySelector('.device-badge').className = `device-badge ${isOn?'badge-on':'badge-off'}`;
+  card.querySelector('.device-badge').textContent = isOn ? 'ON' : 'OFF';
+  const btn = card.querySelector('.toggle-btn');
+  btn.className = `toggle-btn ${isOn?'on':'off'}`;
+  btn.textContent = isOn ? 'Turn OFF' : 'Turn ON';
+}
+
+// ── Alias modal ────────────────────────────────────────────────────────────
+function openAliasModal(name, alias) {
+  document.getElementById('aliasDeviceName').value = name;
+  document.getElementById('aliasValue').value = alias;
+  openModal('aliasModal');
+}
+async function saveAlias() {
+  const name  = document.getElementById('aliasDeviceName').value;
+  const alias = document.getElementById('aliasValue').value.trim();
+  await fetch(`${API}/api/devices/${encodeURIComponent(name)}/alias`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({alias})
+  });
+  if (devices[name]) { devices[name].alias = alias; }
+  closeModal('aliasModal');
+  renderDevices(Object.values(devices));
+  toast('Device renamed');
+}
+
+// ── Timer logic ────────────────────────────────────────────────────────────
+function toggleTimerFields() {
+  const r = document.getElementById('timerRepeat').value;
+  document.getElementById('timerOnceFields').style.display    = r==='once'?'block':'none';
+  document.getElementById('timerRepeatFields').style.display  = r!=='once'?'block':'none';
+  document.getElementById('timerCustomDays').style.display    = r==='custom'?'block':'none';
+}
+
+async function openTimerModal() {
+  populateDeviceSelect('timerDevice');
+  openModal('timerModal');
+}
+
+async function saveTimer() {
+  const device = document.getElementById('timerDevice').value;
+  const action = document.getElementById('timerAction').value;
+  const repeat = document.getElementById('timerRepeat').value;
+  const label  = document.getElementById('timerLabel').value || `${device} ${action}`;
+  let payload = {device, action, repeat, label};
+
+  if (repeat === 'once') {
+    const dt = document.getElementById('timerDatetime').value;
+    if (!dt) return toast('Please pick a date/time', 'error');
+    payload.run_at = new Date(dt).toISOString();
+  } else {
+    const t = document.getElementById('timerTime').value;
+    if (!t) return toast('Please pick a time', 'error');
+    payload.time = t;
+    if (repeat === 'custom') payload.days = document.getElementById('timerDays').value;
+    else payload.days = repeat;
+  }
+
+  const r = await fetch(`${API}/api/timers`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await r.json();
+  if (data.ok) {
+    closeModal('timerModal');
+    toast('Timer saved');
+    loadTimers();
+  }
+}
+
+async function loadTimers() {
+  const r = await fetch(`${API}/api/timers`);
+  const data = await r.json();
+  timers = data.timers;
+  renderTimers();
+}
+
+function renderTimers() {
+  const el = document.getElementById('timerList');
+  const list = Object.values(timers);
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">⏱</div><div class="empty-title">No timers yet</div><button class="btn btn-primary" onclick="openTimerModal()">Create First Timer</button></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="timer-list">${list.map(t => `
+    <div class="timer-card">
+      <div class="timer-icon">${t.action==='on'?'✅':'⛔'}</div>
+      <div class="timer-info">
+        <div class="timer-name">${esc(t.label || t.device)}</div>
+        <div class="timer-detail mono">${esc(t.device)} → ${t.action.toUpperCase()} · ${timerScheduleText(t)}</div>
+      </div>
+      <div class="timer-actions">
+        <button class="btn btn-danger btn-sm" onclick="deleteTimer('${t.id}')">Delete</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function timerScheduleText(t) {
+  if (t.repeat === 'once') return new Date(t.run_at).toLocaleString();
+  return `${t.time} · ${t.repeat}`;
+}
+
+async function deleteTimer(id) {
+  await fetch(`${API}/api/timers/${id}`, {method:'DELETE'});
+  toast('Timer deleted');
+  loadTimers();
+}
+
+// ── Rule logic ────────────────────────────────────────────────────────────
+function openRuleModal() {
+  populateDeviceSelect('ruleTriggerDevice');
+  populateDeviceSelect('ruleActionDevice');
+  openModal('ruleModal');
+}
+
+async function saveRule() {
+  const trigger_device = document.getElementById('ruleTriggerDevice').value;
+  const trigger_on     = document.getElementById('ruleTriggerOn').value === 'true';
+  const action_device  = document.getElementById('ruleActionDevice').value;
+  const action         = document.getElementById('ruleAction').value;
+  const name           = document.getElementById('ruleName').value || `${trigger_device} → ${action_device}`;
+  const r = await fetch(`${API}/api/rules`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({trigger_device, trigger_on, action_device, action, name})
+  });
+  const data = await r.json();
+  if (data.ok) { closeModal('ruleModal'); toast('Rule saved'); loadRules(); }
+}
+
+async function loadRules() {
+  const r = await fetch(`${API}/api/rules`);
+  const data = await r.json();
+  rules = data.rules;
+  renderRules();
+}
+
+function renderRules() {
+  const el = document.getElementById('ruleList');
+  const list = Object.values(rules);
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">⚡</div><div class="empty-title">No rules yet</div><button class="btn btn-primary" onclick="openRuleModal()">Create First Rule</button></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="timer-list">${list.map(r => `
+    <div class="rule-card">
+      <div class="rule-icon">⚡</div>
+      <div class="rule-info">
+        <div class="rule-name">${esc(r.name)}</div>
+        <div class="rule-detail">When <strong>${esc(r.trigger_device)}</strong> turns ${r.trigger_on?'ON':'OFF'} → <strong>${esc(r.action_device)}</strong> turns ${r.action.toUpperCase()}</div>
+      </div>
+      <div class="rule-actions">
+        <label class="toggle-switch" title="${r.enabled?'Enabled':'Disabled'}">
+          <input type="checkbox" ${r.enabled?'checked':''} onchange="toggleRule('${r.id}')">
+          <span class="slider"></span>
+        </label>
+        <button class="btn btn-danger btn-sm" onclick="deleteRule('${r.id}')">Delete</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+async function toggleRule(id) {
+  await fetch(`${API}/api/rules/${id}/toggle`, {method:'POST'});
+  loadRules();
+}
+
+async function deleteRule(id) {
+  await fetch(`${API}/api/rules/${id}`, {method:'DELETE'});
+  toast('Rule deleted');
+  loadRules();
+}
+
+// ── Modal helpers ─────────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if(e.target === el) closeModal(el.id); });
+});
+
+function populateDeviceSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = Object.values(devices).map(d =>
+    `<option value="${esc(d.name)}">${esc(d.alias||d.name)}</option>`
+  ).join('') || '<option value="">No devices found — scan first</option>';
+}
+
+// ── Auto-refresh device states every 30s ─────────────────────────────────
+async function refreshStates() {
+  for (const name of Object.keys(devices)) {
+    try {
+      const r = await fetch(`${API}/api/devices/${encodeURIComponent(name)}/state`);
+      const d = await r.json();
+      refreshDevice(name, d.state);
+    } catch(e) {}
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(async () => {
+  await loadDevices();
+  await loadTimers();
+  await loadRules();
+  setInterval(refreshStates, 30000);
+})();
+
+// ── Update functions ─────────────────────────────────────────────────────
+async function checkUpdate() {
+  const badge = document.getElementById("versionBadge");
+  badge.textContent = "checking…";
+  try {
+    const r = await fetch("/api/check_update");
+    const data = await r.json();
+    if (!data.ok) {
+      badge.textContent = "v" + data.current;
+      toast("Could not reach update server", "error");
+      return;
+    }
+    if (data.has_update) {
+      badge.textContent = "⬆ Update v" + data.latest;
+      badge.classList.add("update-available");
+      if (confirm("Update available: v" + data.latest + "
+
+Install now? The app will restart automatically.")) {
+        applyUpdate();
+      }
+    } else {
+      badge.textContent = "v" + data.current + " ✓";
+      badge.classList.remove("update-available");
+      toast("Already up to date!");
+      setTimeout(() => { badge.textContent = "v" + data.current; }, 3000);
+    }
+  } catch(e) {
+    badge.textContent = "v1.0.0";
+    toast("Update check failed", "error");
+  }
+}
+
+async function applyUpdate() {
+  const badge = document.getElementById("versionBadge");
+  badge.textContent = "updating…";
+  toast("Downloading update…");
+  try {
+    const r = await fetch("/api/update", {method:"POST"});
+    const data = await r.json();
+    if (data.ok) {
+      document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:sans-serif;background:#0d0f14;color:#e8eaf0">
+        <div style="font-size:48px">⬆</div>
+        <div style="font-size:20px;font-weight:700">Update installed!</div>
+        <div style="color:#666d85;font-size:14px">WeMoHub is restarting… refresh this page in a few seconds.</div>
+        <button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;background:#f5a623;color:#000;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Refresh Now</button>
+      </div>`;
+    } else {
+      toast("Update failed: " + data.error, "error");
+      badge.textContent = "v1.0.0";
+    }
+  } catch(e) {
+    toast("Update failed", "error");
+  }
+}
+
+async function exitApp() {
+  if (!confirm('Shut down WeMoHub server? You will lose access until it is restarted.')) return;
+  try {
+    await fetch('/api/shutdown', {method:'POST'});
+  } catch(e) {}
+  document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:sans-serif;background:#0d0f14;color:#e8eaf0">
+    <div style="font-size:48px">⏻</div>
+    <div style="font-size:20px;font-weight:700">WeMoHub has shut down</div>
+    <div style="color:#666d85;font-size:14px">Run python3 app.py (Mac) or START_WEMOHUB_WINDOWS.bat to restart</div>
+  </div>`;
+}
+</script>
+</body>
+</html>

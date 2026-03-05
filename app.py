@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
+# ── Version & Update config ───────────────────────────────────────────────────
+APP_VERSION  = "1.0.0"
+GITHUB_RAW   = "https://raw.githubusercontent.com/DBSSGohan/wemohub/main"
+UPDATE_FILES = [
+    ("app.py",               "app.py"),
+    ("static/index.html",    "static/index.html"),
+]
+
 # ── In-memory state ──────────────────────────────────────────────────────────
 discovered_devices = {}   # name -> device object
 device_aliases    = {}    # name -> alias  (persisted to aliases.json)
@@ -392,6 +400,51 @@ def api_shutdown():
     logger.info("Shutdown requested via UI")
     threading.Thread(target=lambda: (time.sleep(0.5), os.kill(os.getpid(), signal.SIGTERM)), daemon=True).start()
     return jsonify({"ok": True})
+
+# ── Update routes ─────────────────────────────────────────────────────────────
+@app.route("/api/version", methods=["GET"])
+def api_version():
+    return jsonify({"version": APP_VERSION})
+
+@app.route("/api/check_update", methods=["GET"])
+def api_check_update():
+    import urllib.request
+    try:
+        url = f"{GITHUB_RAW}/version.txt"
+        with urllib.request.urlopen(url, timeout=5) as r:
+            latest = r.read().decode().strip()
+        has_update = latest != APP_VERSION
+        return jsonify({"ok": True, "current": APP_VERSION, "latest": latest, "has_update": has_update})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "current": APP_VERSION})
+
+@app.route("/api/update", methods=["POST"])
+def api_update():
+    import urllib.request, shutil
+    base = os.path.dirname(os.path.abspath(__file__))
+    results = []
+    try:
+        for remote_path, local_path in UPDATE_FILES:
+            url      = f"{GITHUB_RAW}/{remote_path}"
+            dest     = os.path.join(base, local_path)
+            dest_dir = os.path.dirname(dest)
+            os.makedirs(dest_dir, exist_ok=True)
+            # Backup original
+            if os.path.exists(dest):
+                shutil.copy2(dest, dest + ".bak")
+            with urllib.request.urlopen(url, timeout=10) as r:
+                content = r.read()
+            with open(dest, "wb") as f:
+                f.write(content)
+            results.append({"file": local_path, "ok": True})
+            logger.info(f"Updated {local_path} from GitHub")
+        # Schedule restart
+        import signal
+        threading.Thread(target=lambda: (time.sleep(1.5), os.kill(os.getpid(), signal.SIGTERM)), daemon=True).start()
+        return jsonify({"ok": True, "files": results, "restarting": True})
+    except Exception as e:
+        logger.error(f"Update failed: {e}")
+        return jsonify({"ok": False, "error": str(e), "files": results})
 
 if __name__ == "__main__":
     restore_timers()
